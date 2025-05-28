@@ -11,6 +11,11 @@ jobs:
     name: Build and Push Docker Image
     runs-on: self-hosted
 
+    env:
+      REGISTRY_ALIAS: n4s8c1b7
+      REPOSITORY: cart-service
+      IMAGE_TAG: ${{ github.run_number }}
+
     steps:
     - name: Checkout Source
       uses: actions/checkout@v4
@@ -35,13 +40,34 @@ jobs:
       uses: aws-actions/amazon-ecr-login@v2
       with:
         registry-type: public
+    
+    - name: Export REGISTRY to environment
+      run: echo "REGISTRY=${{ steps.login-ecr-public.outputs.registry }}" >> $GITHUB_ENV
+
+    # - name: Build, tag, and push docker image to Amazon ECR Public
+    #   env:
+    #     REGISTRY: ${{ steps.login-ecr-public.outputs.registry }}
+    #     REGISTRY_ALIAS: n4s8c1b7
+    #     REPOSITORY: cart-service
+    #     IMAGE_TAG: ${{ github.run_number }}
+    #   run: |
+    #     docker build -t $REGISTRY/$REGISTRY_ALIAS/$REPOSITORY:$IMAGE_TAG .
+    #     docker push $REGISTRY/$REGISTRY_ALIAS/$REPOSITORY:$IMAGE_TAG
 
     - name: Build, tag, and push docker image to Amazon ECR Public
-      env:
-        REGISTRY: ${{ steps.login-ecr-public.outputs.registry }}
-        REGISTRY_ALIAS: n4s8c1b7
-        REPOSITORY: cart-service
-        IMAGE_TAG: ${{ github.run_number }}
-      run: |
-        docker build -t $REGISTRY/$REGISTRY_ALIAS/$REPOSITORY:$IMAGE_TAG .
-        docker push $REGISTRY/$REGISTRY_ALIAS/$REPOSITORY:$IMAGE_TAG
+      run: docker build -t $REGISTRY/$REGISTRY_ALIAS/$REPOSITORY:$IMAGE_TAG .
+
+    - name: Scan Docker image with Trivy
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ env.REGISTRY }}/${{ env.REGISTRY_ALIAS }}/${{ env.REPOSITORY }}:${{ env.IMAGE_TAG }}
+        format: table
+        exit-code: 0
+        ignore-unfixed: true
+        vuln-type: os,library
+        severity: CRITICAL,HIGH
+
+    # - name: Build, tag, and push docker image to Amazon ECR Public
+    #   env:
+    #     REGISTRY: ${{ steps.login-ecr-public.outputs.registry }}
+    #   run: docker push $REGISTRY/$REGISTRY_ALIAS/$REPOSITORY:$IMAGE_TAG
